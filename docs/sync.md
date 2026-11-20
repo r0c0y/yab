@@ -901,6 +901,8 @@ page that says nothing (`Memory.meaningful`) unless the folder said
 something there before: the empty briefs `Memory.prepare` seeds are no
 edit, so a Mac joining no longer replaces the account's `USER.md` and
 `MEMORY.md` with them by a stamp of now (register 3060; `SyncShapesTests`).
+As with the rows, the folder is read back right after a delivery writes it,
+so a page that just came and is forgotten right after still goes.
 
 ## Testing
 

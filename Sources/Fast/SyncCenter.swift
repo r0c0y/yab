@@ -1852,7 +1852,11 @@ final class SyncCenter: ObservableObject {
                 }
             }
         }
-
+            // The folder as written now is read back at once, as the rows
+            // are, so it is what the next difference is measured from
+            // (Journal's `shown`): a page that just came and is forgotten
+            // right after still goes.
+            DispatchQueue.main.async { [weak self] in self?.changed(SyncShapes.memory) }
         }
 
         // A place gone from the two weeks, or from a Mac that stopped

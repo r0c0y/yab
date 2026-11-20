@@ -292,6 +292,27 @@ struct SyncShapesTests {
         #expect(ja.record(.init(collection: SyncShapes.memory, id: "people/sam.md"))?.alive() == true)
     }
 
+    /// A page that just came, read back as the app does right after a
+    /// delivery, and forgotten here still goes.
+    @Test func aPageThatJustCameAndIsForgottenStillGoes() throws {
+        let a = try memoryFolder(), b = try memoryFolder()
+        defer { try? FileManager.default.removeItem(at: a); try? FileManager.default.removeItem(at: b) }
+        let ja = try Journal(path: nil, device: "a"), jb = try Journal(path: nil, device: "b")
+        try SyncShapes.reconcileMemory(jb, in: b)
+        let jane = "# Jane Doe\n\nWorks with Sam.\n"
+        for folder in [a, b] { try FileManager.default.createDirectory(at: folder.appendingPathComponent("people"), withIntermediateDirectories: true) }
+        try jane.write(to: a.appendingPathComponent("people/jane-doe.md"), atomically: true, encoding: .utf8)
+        try SyncShapes.reconcileMemory(ja, in: a)
+        _ = try jb.receive(ja.pending().map { ($0.record, 1) })
+        try jane.write(to: b.appendingPathComponent("people/jane-doe.md"), atomically: true, encoding: .utf8)
+        try SyncShapes.reconcileMemory(jb, in: b)
+        #expect(jb.pending().isEmpty)
+        try FileManager.default.removeItem(at: b.appendingPathComponent("people/jane-doe.md"))
+        try SyncShapes.reconcileMemory(jb, in: b)
+        #expect(jb.pending().map { $0.record.id } == ["people/jane-doe.md"])
+        #expect(jb.record(.init(collection: SyncShapes.memory, id: "people/jane-doe.md"))?.alive() == false)
+    }
+
     private func memoryFolder() throws -> URL {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("mem-\(UUID())")
         try FileManager.default.createDirectory(at: folder.appendingPathComponent("episodic"), withIntermediateDirectories: true)
