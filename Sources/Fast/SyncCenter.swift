@@ -1201,7 +1201,7 @@ final class SyncCenter: ObservableObject {
         if let now = read.now { try SyncNow.reconcile(journal, now, device: read.device) }
         if read.failed != nil { return }
         if collections.contains(SyncShapes.memory) {
-            try journal.reconcile(SyncShapes.memory, SyncShapes.memory(in: Memory.folder))
+            try SyncShapes.reconcileMemory(journal, in: Memory.folder)
         }
         if collections.contains(SyncShapes.file) {
             try journal.reconcile(SyncShapes.file, SyncShapes.files(in: Store.folder))

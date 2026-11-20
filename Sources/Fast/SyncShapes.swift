@@ -138,6 +138,11 @@ enum SyncShapes {
         return out
     }
 
+    /// The memory folder, told to the journal.
+    static func reconcileMemory(_ journal: Journal, in folder: URL) throws {
+        try journal.reconcile(SyncShapes.memory, memory(in: folder))
+    }
+
     /// A day's entries: each "## " heading and what follows it.
     static func entries(_ text: String) -> [String] {
         var out: [String] = [], current: [Substring] = []
