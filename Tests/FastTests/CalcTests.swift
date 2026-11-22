@@ -91,6 +91,25 @@ struct CalcTests {
         #expect(answer("0xff")?.result == "255")
     }
 
+    /// A comma groups thousands, or lakhs, only where it can. One that
+    /// can't is the decimal point it is in much of the world: "1,5" and
+    /// "3,14" were fifteen and 314, so 1,5 kg was 33 pounds. Digits that
+    /// read no way at all have no answer rather than a wrong one.
+    @Test func aCommaThatCantGroupIsADecimalPoint() {
+        #expect(answer("1,5+1")?.result == "2.5")
+        #expect(answer("3,14*2")?.result == "6.28")
+        #expect(answer("1,5 kg in lb")?.result == "3.3069 lb")
+        #expect(answer("0,5 l in ml")?.result == "500 ml")
+        #expect(answer("12,5% of 200")?.result == "25")
+        #expect(answer("1.234,56*2")?.result == "2,469.12")
+        #expect(answer("1,000,000/2")?.result == "500,000")
+        #expect(answer("1,234.5*2")?.result == "2,469")
+        #expect(answer("1,23,456+1")?.result == "123,457")
+        #expect(answer("1,500 kg in g")?.result == "1,500,000 g")
+        #expect(answer("1,2,3+1") == nil)
+        #expect(answer(",5+1") == nil)
+    }
+
     @Test func units() {
         #expect(answer("5 km to mi")?.result == "3.1069 mi")
         #expect(answer("72f in c")?.result == "22.2222°C")
