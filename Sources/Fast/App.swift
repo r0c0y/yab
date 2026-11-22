@@ -1319,7 +1319,8 @@ struct ContentView: View {
                         browser: browser, tab: tab, peek: browser.peek, strip: !browser.prefs.sidebar,
                         height: AddressBar.height(sidebar: browser.prefs.sidebar, carded: laid), corner: corner,
                         half: split, doors: side != .left,
-                        columnDoor: side != .right, leadingInset: margins.leading,
+                        // Of two halves, the one on the column's side.
+                        columnDoor: side != (browser.flank == .right ? .left : .right), leadingInset: margins.leading,
                         leave: split ? { [browser, id = tab.id] in browser.leaveSplit(id) } : nil
                     )
                     .toned(worn)
@@ -1806,10 +1807,23 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { Hints.shared.compose() }
             if browser.windowID == nil { BookmarkMenu.shared.start(for: browser) }
         }
-        .onDisappear {
-            if let keys { NSEvent.removeMonitor(keys); self.keys = nil }
-            if let middle { NSEvent.removeMonitor(middle); self.middle = nil }
+        .onDisappear { unwatchKeys() }
+        // A window of its own closing goes for good, unlike the first, which
+        // is shown again, yet nothing in it disappears: its watchers, which
+        // hold this view and with it the window and its browser, go with
+        // it, and so does the view's own hold on the window. Kept, they held
+        // every closed window for as long as Yab ran (#1046).
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
+            guard let window, note.object as? NSWindow === window,
+                  (browser.windowID ?? BrowserWindows.primaryID) != BrowserWindows.primaryID else { return }
+            unwatchKeys()
+            self.window = nil
         }
+    }
+
+    private func unwatchKeys() {
+        if let keys { NSEvent.removeMonitor(keys); self.keys = nil }
+        if let middle { NSEvent.removeMonitor(middle); self.middle = nil }
     }
 
     /// Give the keyboard back to the page once the field is done with it.

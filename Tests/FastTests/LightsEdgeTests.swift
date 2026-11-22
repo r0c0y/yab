@@ -209,6 +209,44 @@ struct LightsEdgeTests {
         #expect(!EdgeReach.away(CGPoint(x: -600, y: 400), window: flush, screen: nil))
     }
 
+    /// #786: a window behind another app's is watched while the pointer is
+    /// over it and nothing covers it there, so a rest at its edge brings
+    /// its column out with no click first.
+    @Test func aWindowBehindIsWatchedOnlyUnderThePointer() {
+        let frame = CGRect(x: 300, y: 200, width: 1100, height: 700)
+        let edge = CGPoint(x: 301, y: 500), beside = CGPoint(x: 250, y: 500)
+        func watches(front: Bool = false, onScreen: Bool = true, at pointer: CGPoint = edge,
+                     top: Int = 7, own: Set<Int> = [7]) -> Bool {
+            EdgeReach.watches(front: front, onScreen: onScreen, frame: frame, pointer: pointer, top: top, own: own)
+        }
+        // In front, wherever the pointer is: past the edge beside it too.
+        #expect(watches(front: true, at: beside, top: 9))
+        // Behind, the pointer over it and nothing over it there.
+        #expect(watches())
+        // A child window of its own under the pointer is the window's.
+        #expect(watches(top: 8, own: [7, 8]))
+        // Another app's window over it there.
+        #expect(!watches(top: 9))
+        // The pointer beside it, on another window.
+        #expect(!watches(at: beside))
+        // Minimized, hidden or on another desktop.
+        #expect(!watches(onScreen: false))
+    }
+
+    /// The window server is asked what is under the pointer only once the
+    /// pointer is inside a window behind: thirty looks a second ask it
+    /// nothing while the pointer is elsewhere, or the window is in front.
+    @Test func theWindowServerIsAskedOnlyForAPointerInsideAWindowBehind() {
+        let frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        var asked = 0
+        func top() -> Int { asked += 1; return 1 }
+        let elsewhere = EdgeReach.watches(front: false, onScreen: true, frame: frame, pointer: CGPoint(x: 500, y: 500), top: top(), own: [1])
+        let inFront = EdgeReach.watches(front: true, onScreen: true, frame: frame, pointer: CGPoint(x: 50, y: 50), top: top(), own: [1])
+        #expect(!elsewhere && inFront && asked == 0)
+        let inside = EdgeReach.watches(front: false, onScreen: true, frame: frame, pointer: CGPoint(x: 50, y: 50), top: top(), own: [1])
+        #expect(inside && asked == 1)
+    }
+
     @Test func pageControlsInTheCornerNeverRevealTheColumn() {
         for x in [CGFloat(4), 8, 12, 20, 38, 60] {
             for y in [CGFloat(8), 24, 40, 300] {

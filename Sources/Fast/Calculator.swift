@@ -140,14 +140,38 @@ enum Calc {
 
     /// "12", "1,200.5", "1.5k", "2m": a number as it is typed.
     static func number(_ text: String) -> Double? {
-        var words = text.lowercased().replacingOccurrences(of: ",", with: "").replacingOccurrences(of: " ", with: "")
+        var words = text.lowercased().replacingOccurrences(of: " ", with: "")
         var scale = 1.0
         if let last = words.last, "km".contains(last), words.count > 1, words.dropLast().last?.isNumber == true {
             scale = last == "k" ? 1_000 : 1_000_000
             words.removeLast()
         }
-        guard !words.isEmpty, words.allSatisfy({ $0.isNumber || $0 == "." }), let value = Double(words) else { return nil }
+        guard let digits = digits(words), let value = Double(digits) else { return nil }
         return value * scale
+    }
+
+    /// A number's digits as typed, read the one way they can be: commas
+    /// that group thousands ("1,200.5") or lakhs ("1,23,456") taken out,
+    /// and a comma that can't group, "1,5" or "3,14", read as the decimal
+    /// point it is in much of the world, as is the comma after points
+    /// that group ("1.234,56"). Taking every comma out read those as 15
+    /// and 314. Nil for digits read no way at all ("1,2,3", ",5").
+    static func digits(_ text: String) -> String? {
+        guard !text.isEmpty, text.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == "." || $0 == ",") }) else { return nil }
+        guard text.contains(",") else { return text }
+        func reads(_ part: Substring, _ pattern: String) -> Bool { part.range(of: pattern, options: .regularExpression) != nil }
+        let thousands = #"^[0-9]{1,3}(,[0-9]{3})+$"#, lakhs = #"^[0-9]{1,2}(,[0-9]{2})*,[0-9]{3}$"#
+        // "1,200.5", "1,23,456": commas that group, then a point or none.
+        let points = text.split(separator: ".", omittingEmptySubsequences: false)
+        if points.count <= 2, reads(points[0], thousands) || reads(points[0], lakhs) {
+            return text.replacingOccurrences(of: ",", with: "")
+        }
+        // "1,5", "1.234,56": one comma, the decimal point, after any points
+        // that group.
+        let halves = text.split(separator: ",", omittingEmptySubsequences: false)
+        guard halves.count == 2, !halves[0].isEmpty, !halves[1].isEmpty, !halves[1].contains("."),
+              !halves[0].contains(".") || reads(halves[0], #"^[0-9]{1,3}(\.[0-9]{3})+$"#) else { return nil }
+        return halves[0].replacingOccurrences(of: ".", with: "") + "." + halves[1]
     }
 
     /// The words split at a joining word, "to", "in", "as", tried from the
@@ -918,12 +942,12 @@ enum Sum {
                 guard let inside = expression(), eat(")") != nil else { return nil }
                 return inside
             }
-            var digits = ""
+            var typed = ""
             while let next = peek(), next.isNumber || next == "." || next == "," {
-                if next != "," { digits.append(next) }
+                typed.append(next)
                 at += 1
             }
-            return Double(digits)
+            return Calc.digits(typed).flatMap { Double($0) }
         }
     }
 }

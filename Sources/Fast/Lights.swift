@@ -658,6 +658,20 @@ enum EdgeReach {
         point.x >= 0 && point.y >= 0 && point.y <= height
     }
 
+    /// Whether the pointer is looked at for a window. Always for the one in
+    /// front. For one behind another app's, only while the pointer is over
+    /// it with nothing covering it there: `top` is the number of the
+    /// topmost window under the pointer and `own` the window's number and
+    /// its child windows'. Both are asked only once the pointer is inside
+    /// the window's frame, so a window behind costs the window server
+    /// nothing while the pointer is elsewhere.
+    static func watches(front: Bool, onScreen: Bool, frame: CGRect, pointer: CGPoint,
+                        top: @autoclosure () -> Int, own: @autoclosure () -> Set<Int>) -> Bool {
+        if front { return true }
+        guard onScreen, frame.contains(pointer) else { return false }
+        return own().contains(top())
+    }
+
     /// The pointer reached the left edge: on it, or gone out past it since
     /// the last look, through the edge itself and not over the top or the
     /// bottom. Coming in from outside is not reaching it.
@@ -933,6 +947,11 @@ final class Brim {
         kept[ObjectIdentifier(window)]?.pressed(at: pointer)
     }
 
+    /// A look at the bench's pointer now, as a move or a tick would take.
+    static func benchLook(in window: NSWindow) {
+        kept[ObjectIdentifier(window)]?.moved()
+    }
+
     private init(_ window: NSWindow, browser: Browser) {
         self.window = window
         self.browser = browser
@@ -1113,6 +1132,23 @@ final class Brim {
         restLook = nil
     }
 
+    /// The number of the topmost window under a point on the screen, any
+    /// app's.
+    private static func top(under pointer: NSPoint) -> Int {
+        NSWindow.windowNumber(at: pointer, belowWindowWithWindowNumber: 0)
+    }
+
+    /// The pointer is on another window and this one is not in front: the
+    /// column and the strip it had out over the page go back, unless
+    /// something hangs from them or a button is held, a drag on its way
+    /// out. In full screen the strip's reveal is AppKit's, left to it.
+    private func letGo(behind browser: Browser) {
+        guard NSEvent.pressedMouseButtons == 0 else { return }
+        if browser.sidePeek, !columnHeld(browser) { Self.bring(browser, out: false) }
+        if !browser.fullScreen, browser.stripPeek, !stripHeld(browser) { Self.bringStrip(browser, out: false) }
+        if browser.headOut { browser.moveHead(out: false) }
+    }
+
     /// A press in the lights' corner keeps it quiet for a moment: the button
     /// there was clicked, and what comes up under the pointer is the page.
     /// With the strip put away, a press anywhere near the top does the same
@@ -1155,11 +1191,28 @@ final class Brim {
         // nothing.
         let last = lastPointer
         lastPointer = nil
-        guard let window, let browser, browser.active?.immersed != true,
-              window.isKeyWindow || window.isMainWindow || Brim.benchFront else { cancelRest(); return }
+        guard let window, let browser, browser.active?.immersed != true else { cancelRest(); return }
+        let pointer = Brim.benchPointer ?? NSEvent.mouseLocation
+        // A window behind another app's has the pointer too while the
+        // pointer is over it: its column comes out at its edge with no
+        // click to bring the window forward first (#786). With the pointer
+        // on some other window nothing here is looked at, so what this
+        // window had out goes: nothing else would put it away again.
+        let front = window.isKeyWindow || window.isMainWindow || Brim.benchFront
+        guard EdgeReach.watches(front: front, onScreen: window.isVisible && window.occlusionState.contains(.visible),
+                                frame: window.frame, pointer: pointer, top: Brim.top(under: pointer),
+                                own: Set(([window] + (window.childWindows ?? [])).map(\.windowNumber))) else {
+            cancelRest()
+            // A rest at the top edge from before counts for nothing when
+            // the pointer comes back to it: the strip waits a whole rest.
+            stripResting = nil
+            stripLook?.cancel()
+            stripLook = nil
+            letGo(behind: browser)
+            return
+        }
         let full = browser.fullScreen
         guard full || (browser.prefs.sidebar && browser.prefs.sideShut) || browser.headBand || browser.stripAway else { cancelRest(); return }
-        let pointer = Brim.benchPointer ?? NSEvent.mouseLocation
         let frame = window.frame
         let fromTop = frame.maxY - pointer.y
         // From the edge the column comes out of.

@@ -126,10 +126,8 @@ enum AppIconStyle: String, CaseIterable, Identifiable {
         if self == .surprise { return PostReward.surprisePicture(dark: dark) }
         if self == .charm {
             guard let resources = Self.resources else { return nil }
-            let settings = Store.settings
-            return CharmDraw.image(resources: resources, left: settings.string(forKey: "invite.charm.left") ?? "mint",
-                                   right: settings.string(forKey: "invite.charm.right"),
-                                   apart: settings.bool(forKey: "invite.charm.apart"))
+            let charm = Self.charmNow
+            return CharmDraw.image(resources: resources, left: charm.left, right: charm.right, apart: charm.apart)
         }
         let relativePath: String
         if self == .original, !dark {
@@ -569,15 +567,34 @@ extension AppIconStyle {
             .eraseToAnyPublisher()
     }
 
+    /// What the charm is drawn from, as the Dock's tile reads it: each
+    /// half's color and whether they are apart (Invites.charmChanged).
+    static var charmNow: (left: String, right: String?, apart: Bool) {
+        let settings = Store.settings
+        return (settings.string(forKey: "invite.charm.left") ?? "mint", settings.string(forKey: "invite.charm.right"),
+                settings.bool(forKey: "invite.charm.apart"))
+    }
+
     /// The whole picture the Dock draws, room for its shadow included, read
     /// once a look and drawn at whatever size it is asked for.
     @MainActor private static var kept: [String: NSImage] = [:]
+    /// The charm as last drawn, and what it was drawn from.
+    @MainActor private static var keptCharm: (from: String, image: NSImage)?
 
     @MainActor static func picture(_ style: AppIconStyle, dark: Bool) -> NSImage {
         let key = style.rawValue + (dark ? "-dark" : "")
         // The charm is drawn as it is right now: its colors and whether
-        // the halves are apart change while Yab runs.
-        if style == .charm { return style.image(dark: dark) ?? NSImage() }
+        // the halves are apart change while Yab runs. Kept until they do:
+        // a new image each time it was asked for was drawn again, at its
+        // full size on the main thread, in every pass of App Icon's row.
+        if style == .charm {
+            let charm = charmNow
+            let from = "\(charm.left)|\(charm.right ?? "")|\(charm.apart)"
+            if let keptCharm, keptCharm.from == from { return keptCharm.image }
+            let image = style.image(dark: dark) ?? NSImage()
+            keptCharm = (from, image)
+            return image
+        }
         if let image = kept[key] { return image }
         let image = style.image(dark: dark) ?? NSImage()
         kept[key] = image

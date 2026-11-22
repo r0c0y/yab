@@ -216,6 +216,14 @@ final class Browser: NSObject, ObservableObject, Relaying {
             // In mail: its page, or one of the space's tabs (MailTabRows).
             if inMail { mailFollows() }
             findFollows(left: oldValue)
+            // Hide Elements points at one page, and ends with it. Left on,
+            // its bar stood over a page nothing pointed at, Esc there
+            // turned it off on the wrong tab, and the page left went on
+            // hiding whatever was clicked, with no bar to say so.
+            if veiling {
+                veiling = false
+                tab(id: oldValue)?.stopPicking()
+            }
             // Developer Tools are the tab's (DevTools.swift).
             devFollows(left: oldValue)
             // The tab just left is the tab just looked at. Whether a tab has
@@ -2905,6 +2913,8 @@ final class Browser: NSObject, ObservableObject, Relaying {
     @ObservationIgnored var passedOverSince: TimeInterval?
     /// The next look while memory stays short (`lookAgain`).
     @ObservationIgnored var nextLook: DispatchWorkItem?
+    /// The window is gone (`stopWatching`): a relief under way looks no more.
+    @ObservationIgnored var stoppedWatching = false
     /// The tabs you were last on, the one just left first (Sleep.swift:
     /// the few you go back and forth between are not put to sleep).
     @ObservationIgnored var recent: [Tab.ID] = []
@@ -4024,10 +4034,12 @@ final class Browser: NSObject, ObservableObject, Relaying {
         if let opening { opening(self) } else { BrowserWindows.shared.newWindow(from: self) }
     }
 
-    /// A separate private window, seeded before it can be shown or restored.
-    func newPrivateWindow() {
+    /// A separate private window, seeded before it can be shown or restored,
+    /// with `url` in it when there is one (a link menu's Open Link in Private Window).
+    func newPrivateWindow(opening url: URL? = nil) {
         if NSApp.currentEvent?.type == .keyDown, NSApp.currentEvent?.isARepeat == true { return }
-        BrowserWindows.shared.newPrivateWindow(from: self)
+        let window = BrowserWindows.shared.newPrivateWindow(from: self)
+        if let url { window.arrive(url) }
     }
 
     /// The field, empty, asking where to go, with no tab in front: over
@@ -4408,6 +4420,7 @@ final class Browser: NSObject, ObservableObject, Relaying {
     /// closed there, without going to it, and kept for ⌘⇧T and the diary
     /// as a close in the row is.
     func closeElsewhere(_ tab: Tab) {
+        if closePeekTab(tab) { return }
         guard let space = parked.first(where: { $0.value.tabs.contains(where: { $0 === tab }) })?.key,
               let index = parked[space]?.tabs.firstIndex(where: { $0 === tab }) else { return }
         remember(tab, at: index)
@@ -7424,7 +7437,7 @@ final class Browser: NSObject, ObservableObject, Relaying {
         // for all of it: ⌘T, then whatever you meant.
         let openMatches = MainBudget.chunk("field.open") { openPageMatches(matching: typed) }
         let open = openMatches.rows
-        let already = Set(open.filter { automaticOpenPage($0) }.compactMap { $0.url.map { Address.pretty($0).lowercased() } })
+        let already = Set(open.filter { automaticOpenPage($0) }.compactMap { $0.url.map(History.key(for:)) })
         // Bookmarks among the places, as browsers' address fields
         // offer them: read again only after they change.
         history.keep(bookmarks: bookmarks.roots, revision: bookmarks.revision)
@@ -7609,7 +7622,7 @@ final class Browser: NSObject, ObservableObject, Relaying {
         for remote in openElsewhere {
             if asked == .tab, FieldUnder.shared.tabs, let url = remote.url {
                 let key = History.key(for: url)
-                if !already.contains(Address.pretty(url).lowercased()), remoteDestinations.insert(key).inserted {
+                if !already.contains(key), remoteDestinations.insert(key).inserted {
                     var destination = places.first { $0.url.map(History.key(for:)) == key }
                         ?? Suggestion(key: key, title: remote.key, url: url, kind: .known)
                     destination.opensHere = true
@@ -7676,14 +7689,14 @@ final class Browser: NSObject, ObservableObject, Relaying {
                   // only its address begun means navigation. A title match
                   // ("google" in Play Console) stays under the words searched.
                   let kept = (openHere + remoteCopies + saved).first(where: {
-                      $0.url.map { Address.pretty($0).lowercased().hasPrefix(text.lowercased()) } == true
+                      $0.url.map { History.key(for: $0).hasPrefix(text.lowercased()) } == true
                   }), let row = list.firstIndex(of: kept) {
             lead = row
         } else if let ending {
             // Finishing the address of a page that is already open: Return
             // goes back to it rather than opening it again.
             let whole = (typed + ending).lowercased()
-            lead = list.firstIndex { automaticOpenPage($0) && $0.url.map { Address.pretty($0).lowercased() } == whole }
+            lead = list.firstIndex { automaticOpenPage($0) && $0.url.map(History.key(for:)) == whole }
                 ?? list.firstIndex { $0.isPlace && $0.key == whole }
         } else if let quickName = quick.first(where: { $0.name.lowercased() == text.lowercased() }),
                   let quickRow = list.firstIndex(where: { $0.kind == .quickAction(quickName.id) }) {
@@ -8707,7 +8720,14 @@ final class Browser: NSObject, ObservableObject, Relaying {
 
         let target: URL?
         if ending != nil {
-            target = Address.url(from: completed)
+            // The words the ending finished are a place's name in the list,
+            // its address without scheme or port: read back alone, a machine
+            // known by one word (nas) is no address, and localhost is the
+            // server on port 80, not the one on 3000 its row opens (#761).
+            let place = query.lead.flatMap { lead in
+                offers.indices.contains(lead) && offers[lead].isPlace && offers[lead].key == completed.lowercased() ? offers[lead].url : nil
+            }
+            target = Address.finished(completed, place: place)
         } else {
             target = searchEngine.destination(for: typed)
         }
@@ -9258,9 +9278,26 @@ extension Browser {
         download.webKitCreated()
     }
 
+    /// Closes a Peek tab when its page calls `window.close()` (for example at
+    /// the end of an adopted OAuth popup). Returns whether `tab` was a Peek.
+    @discardableResult
+    func closePeekTab(_ tab: Tab) -> Bool {
+        guard !isLive(tab) else { return false }
+        if peeking === tab {
+            closePeek()
+            return true
+        }
+        if let source = tabs.first(where: { $0.peek === tab }) ?? parkedTabs.first(where: { $0.peek === tab }) {
+            dropPeek(of: source)
+            return true
+        }
+        return false
+    }
+
     /// An ordinary tab's page asking to close itself.
     func pageClosed(_ page: any PageHandle) {
         guard let tab = tab(owning: page) else { return }
+        if closePeekTab(tab) { return }
         // Back to whoever opened it, so you land where you started the sign-in
         // rather than wherever the row happens to put you.
         if !tab.bench || tab.id == activeID, let home = self.tab(id: tab.opener) {
@@ -9376,6 +9413,7 @@ extension Browser {
     /// Reopened, the window comes back from its session file.
     func letGo() {
         fullscreenDeparture.stop()
+        stopWatching()
         for tab in tabs + parkedTabs + outside { tab.close() }
     }
 

@@ -1599,7 +1599,7 @@ static std::shared_ptr<QueuedKeyboardEvent> TakeKeyboard(Tab& tab, NSEvent* even
   tab.keyboard.erase(tab.keyboard.begin(), std::next(found));
   return entry;
 }
-static NSEvent* DispatchHostedKeyboard(NSEvent* event) {
+static NSEvent* DispatchPageKeyboard(NSEvent* event) {
   Tab* target = nullptr;
 #if YABCORE_EXTENSION_HOOKS
   for (auto& [token, popup] : nativePopupInputs) {
@@ -1608,8 +1608,21 @@ static NSEvent* DispatchHostedKeyboard(NSEvent* event) {
 #endif
   if (!target) {
     for (auto& [id, tab] : tabs) {
-      if (tab.externallyHosted && tab.native == event.window) { target = &tab; break; }
+      if (tab.native == event.window) { target = &tab; break; }
     }
+  }
+  // Another app typing into the field Yab has focused (Cotypist accepting a
+  // completion with Tab) posts its keys to the process that owns the focused
+  // element, this one. This process is never active and its windows never
+  // key, so AppKit gives such a key no window and it was dropped: the
+  // completion was never typed. It goes to the page Yab has focused, the one
+  // whose focused element the other app was handed (accessibility.inc).
+  if (!target && !event.window && event.type != NSEventTypeFlagsChanged && !KeyboardEnvelopeOwned(event)) {
+    for (auto& [id, tab] : tabs) {
+      if (tab.externallyHosted && tab.focused && tab.visible && !tab.closing && tab.native && tab.browser) { target = &tab; break; }
+    }
+    if (target && getenv("YAB_PROBE") && *getenv("YAB_PROBE"))
+      fprintf(stderr, "YabCore keyboard from another app: %lu characters to %s\n", (unsigned long)event.characters.length, target->id.c_str());
   }
   if (target) {
     Tab& tab = *target;
@@ -1621,7 +1634,8 @@ static NSEvent* DispatchHostedKeyboard(NSEvent* event) {
       fprintf(stderr, "YabCore keyboard stamp mismatch: got=%llu expected=%llu pending=%zu\n",
               (unsigned long long)KeyboardEventStamp(event), (unsigned long long)tab.keyboard.front()->stamp,
               tab.keyboard.size());
-    NSView* content = event.window.contentView;
+    NSWindow* window = tab.native;
+    NSView* content = window.contentView;
     NSView* view = FindView(content.superview ?: content, @"RenderWidgetHostViewCocoa");
     if (!view) return delivery ? nil : event;
     if (delivery) {
@@ -1633,7 +1647,6 @@ static NSEvent* DispatchHostedKeyboard(NSEvent* event) {
         (event.characters.length > 1 || native.characters.length > 1))
       fprintf(stderr, "YabCore keyboard payload: found=%d envelopeUnits=%lu nativeUnits=%lu\n", (bool)delivery,
               (unsigned long)event.characters.length, (unsigned long)native.characters.length);
-    NSWindow* window = event.window;
     NSResponder* target = [window.firstResponder isKindOfClass:NSView.class] &&
         [(NSView*)window.firstResponder isDescendantOf:window.contentView] ? window.firstResponder : view;
     if (event.type == NSEventTypeFlagsChanged) [target flagsChanged:native];
@@ -2798,6 +2811,10 @@ class App : public CefApp, public CefBrowserProcessHandler {
     // media engagement, and the hidden overlay never gets a press. A trusted one
     // leaves both hidden. Document Picture in Picture doesn't read this.
     features += ",VideoPipForceTrustedForMediaPlaybackForTesting";
+    // Global Privacy Control, as WebKit tabs send it (Web.globalPrivacyControl).
+    // Chrome's own pref needs its UniversalOptOut settings UI; this is the
+    // switch behind chrome://flags#enable-global-privacy-control.
+    features += ",GlobalPrivacyControlForce";
 #if YABCORE_DISCARD
     // Native discard is off by default on macOS.
     features += ",WebContentsDiscard";
@@ -2855,7 +2872,7 @@ class App : public CefApp, public CefBrowserProcessHandler {
     if (!wire.Start(socket_)) { fprintf(stderr, "Cannot bind private YabCore socket\n"); QuitOnce(); return; }
     [NSEvent addLocalMonitorForEventsMatchingMask:(NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged)
       handler:^NSEvent*(NSEvent* event) {
-        return DispatchHostedKeyboard(event);
+        return DispatchPageKeyboard(event);
       }];
     wire.onRequest = Request;
     wire.onShed = [](const std::string& tab, size_t bytes) { ShedPage(tab, bytes); };

@@ -1,0 +1,39 @@
+# Fork only, never sent upstream: runs the suite a fix touches at the
+# commit with only the tests (main's behavior) and at the fix, because
+# ci.yml's changed-suites step needs scripts/runs/tests_for.py, which the
+# public repository doesn't have.
+name: Fork proof
+
+on:
+  pull_request:
+
+jobs:
+  suite:
+    name: CalcTests at ${{ matrix.at }}
+    runs-on: macos-26
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - at: tests-only
+            back: 2
+          - at: fix
+            back: 1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 5
+          persist-credentials: false
+      - name: Go to the commit
+        run: git checkout --detach "HEAD~${{ matrix.back }}" && git log --oneline -1
+      - name: CalcTests
+        shell: bash -o pipefail {0}
+        run: swift test --filter CalcTests 2>&1 | tee swift-test.log
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-test-log-${{ matrix.at }}
+          path: swift-test.log
