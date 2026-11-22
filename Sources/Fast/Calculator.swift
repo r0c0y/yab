@@ -163,7 +163,8 @@ enum Calc {
         let thousands = #"^[0-9]{1,3}(,[0-9]{3})+$"#, lakhs = #"^[0-9]{1,2}(,[0-9]{2})*,[0-9]{3}$"#
         // "1,200.5", "1,23,456": commas that group, then a point or none.
         let points = text.split(separator: ".", omittingEmptySubsequences: false)
-        if points.count <= 2, reads(points[0], thousands) || reads(points[0], lakhs) {
+        if points.count <= 2, points.count == 1 || !points[1].contains(","),
+           reads(points[0], thousands) || reads(points[0], lakhs) {
             return text.replacingOccurrences(of: ",", with: "")
         }
         // "1,5", "1.234,56": one comma, the decimal point, after any points
@@ -234,7 +235,8 @@ enum Calc {
 
     /// The three readings of a percentage, made once.
     private static let percents: [NSRegularExpression] = {
-        let number = #"([0-9][0-9,]*\.?[0-9]*)"#
+        // Any digits, points and commas: Calc.number reads them, or not.
+        let number = #"([0-9][0-9.,]*)"#
         return [number + #"\s*%\s*of\s*"# + number, number + #"\s*%\s*off\s*"# + number,
                 number + #"\s*([+-])\s*"# + number + #"\s*%"#]
             .map { try! NSRegularExpression(pattern: "^" + $0 + "$") }

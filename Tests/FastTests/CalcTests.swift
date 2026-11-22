@@ -102,12 +102,14 @@ struct CalcTests {
         #expect(answer("0,5 l in ml")?.result == "500 ml")
         #expect(answer("12,5% of 200")?.result == "25")
         #expect(answer("1.234,56*2")?.result == "2,469.12")
+        #expect(answer("1.234,56 + 10%")?.result == "1,358.02")
         #expect(answer("1,000,000/2")?.result == "500,000")
         #expect(answer("1,234.5*2")?.result == "2,469")
         #expect(answer("1,23,456+1")?.result == "123,457")
         #expect(answer("1,500 kg in g")?.result == "1,500,000 g")
         #expect(answer("1,2,3+1") == nil)
         #expect(answer(",5+1") == nil)
+        #expect(answer("1,234.5,6+1") == nil)
     }
 
     @Test func units() {
