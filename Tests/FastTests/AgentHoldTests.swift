@@ -24,6 +24,9 @@ final class AgentHoldTests: XCTestCase {
     <form id="ars" onsubmit="event.preventDefault()"><p>Total AR$19.99</p><button>Pay now</button></form>
     <form id="mex" onsubmit="event.preventDefault()"><p>Order total Mex$19.99</p><button>Pay now</button></form>
     <form id="usd" onsubmit="event.preventDefault()"><p>Total<b>$12.00</b></p><button>Pay now</button></form>
+    <form id="tax" onsubmit="event.preventDefault()"><div>$150.00 order total</div><div>Includes $5.00 tax</div><button>Pay now</button></form>
+    <form id="under" onsubmit="event.preventDefault()"><p>Order total</p><p>$9.00</p><button>Pay now</button></form>
+    <form id="vague" onsubmit="event.preventDefault()"><p>Order total</p><p>Includes $5.00 tax</p><button>Pay now</button></form>
     <form id="loja" onsubmit="event.preventDefault(); window.pago = 1">
       <p>Total R$ 1.234,56</p>
       <button id="pagar">Pay now</button>
@@ -176,14 +179,18 @@ final class AgentHoldTests: XCTestCase {
     /// From the page to the decision: an agent pays without asking only an
     /// amount in US dollars under the limit. A currency the script doesn't
     /// know keeps its letters (CAD$5.00 was $5.00) and asks, and the word of
-    /// a button or a total drawn against the sign is no currency.
+    /// a button or a total drawn against the sign is no currency. A total
+    /// written before its label is the total, not the tax on the next line
+    /// ($150.00 order total was $5.00), and a line that is more than the
+    /// amount is no total: it asks.
     func testOnlyUSDollarsUnderTheLimitArePaidWithoutAsking() async throws {
         let rules = AgentRules.shared
         let limit = rules.payLimit
         rules.payLimit = 20
         defer { rules.payLimit = limit }
         let cases: [(form: String, amount: String, pays: Bool)] = [
-            ("ten", "$10", true), ("usd", "$12.00", true), ("shop", "$42.10", false),
+            ("ten", "$10", true), ("usd", "$12.00", true), ("under", "$9.00", true), ("shop", "$42.10", false),
+            ("tax", "$150.00", false), ("vague", "", false),
             ("cad", "CAD$5.00", false), ("ars", "AR$19.99", false), ("mex", "Mex$19.99", false), ("loja", "R$1.234,56", false),
         ]
         for (form, amount, pays) in cases {
