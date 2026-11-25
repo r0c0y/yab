@@ -763,19 +763,23 @@ extension AgentPage {
       // What it comes to, when it pays: on the button ("Pay $42.10"), or on
       // the total's line of its form or page, or the line under it. Whole,
       // with its digits as written ("€ 1.299,00" was read only to its first
-      // point, €1.29) and a dollar's or a peso's letters before its sign
-      // (US$, R$, Mex$), known ones only, so the word of a button that
-      // draws "Pay" and "$10" apart is no currency.
-      const cash = /(\\b(?:US|AU|A|CA|C|NZ|HK|SG|S|NT|MX|Mex|COL|Col|RD|R|J|TT|CI|BZ|Bz|BDS|Bds|EC|FJ|N|T|Z|B))?[$€£]\\s?\\d(?:[\\d.,]*\\d)?/;
-      let amount = (name.match(cash) || [''])[0];
+      // point, €1.29) and any letters against its sign (US$, R$, CAD$, AR$,
+      // Mex$): only none or US is a US dollar (AgentRules.dollars), so a
+      // currency this doesn't know asks. The button's own word and the
+      // total's label come off first: a page that draws "Pay" or "Total"
+      // against "$10" says "Pay$10", and Pay is no currency.
+      const cash = /(\\b[A-Za-z]+)?[$€£]\\s?\\d(?:[\\d.,]*\\d)?/;
+      const label = /(order total|grand total|total due|amount due|you pay|estimated total|^\\s*total\\b)/i;
+      let amount = (name.replace(verbs, '').replace(foreign, '').match(cash) || [''])[0];
       // The nearest surroundings first, out to the whole page: a checkout's
       // total is seldom inside the button's own form.
       for (const scope of [$closest(b, '[role=dialog],dialog'), $closest(b, 'form'), $closest(b, 'main,aside'), $body(doc)]) {
         if (amount || !scope) continue;
         const lines = textOf(scope).split('\\n');
         lines.forEach((line, i) => {
-          if (/(order total|grand total|total due|amount due|you pay|estimated total|^\\s*total\\b)/i.test(line)) {
-            const m = line.match(cash) || (lines[i + 1] || '').match(cash);
+          const said = line.match(label);
+          if (said) {
+            const m = line.slice(said.index + said[0].length).match(cash) || (lines[i + 1] || '').match(cash);
             if (m) amount = m[0];
           }
         });

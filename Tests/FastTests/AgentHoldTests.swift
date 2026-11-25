@@ -20,6 +20,10 @@ final class AgentHoldTests: XCTestCase {
       <div role="button" id="post" onclick="window.talked = 2"><span id="inner">Send</span></div>
     </div>
     <form id="ten" onsubmit="event.preventDefault(); window.tenPaid = 1"><button id="pay-ten">Pay<span>$10</span></button></form>
+    <form id="cad" onsubmit="event.preventDefault()"><p>Total CAD$5.00</p><button>Pay now</button></form>
+    <form id="ars" onsubmit="event.preventDefault()"><p>Total AR$19.99</p><button>Pay now</button></form>
+    <form id="mex" onsubmit="event.preventDefault()"><p>Order total Mex$19.99</p><button>Pay now</button></form>
+    <form id="usd" onsubmit="event.preventDefault()"><p>Total<b>$12.00</b></p><button>Pay now</button></form>
     <form id="loja" onsubmit="event.preventDefault(); window.pago = 1">
       <p>Total R$ 1.234,56</p>
       <button id="pagar">Pay now</button>
@@ -169,6 +173,28 @@ final class AgentHoldTests: XCTestCase {
 
     /// The button's own word beside the sign is no currency: "Pay" and
     /// "$10" drawn apart read "Pay$10", and the amount is "$10".
+    /// From the page to the decision: an agent pays without asking only an
+    /// amount in US dollars under the limit. A currency the script doesn't
+    /// know keeps its letters (CAD$5.00 was $5.00) and asks, and the word of
+    /// a button or a total drawn against the sign is no currency.
+    func testOnlyUSDollarsUnderTheLimitArePaidWithoutAsking() async throws {
+        let rules = AgentRules.shared
+        let limit = rules.payLimit
+        rules.payLimit = 20
+        defer { rules.payLimit = limit }
+        let cases: [(form: String, amount: String, pays: Bool)] = [
+            ("ten", "$10", true), ("usd", "$12.00", true), ("shop", "$42.10", false),
+            ("cad", "CAD$5.00", false), ("ars", "AR$19.99", false), ("mex", "Mex$19.99", false), ("loja", "R$1.234,56", false),
+        ]
+        for (form, amount, pays) in cases {
+            let held = try await agent("document.querySelector('#\(form)').requestSubmit()")
+            let said = held?["amount"] as? String ?? ""
+            XCTAssertEqual(said, amount, form)
+            XCTAssertEqual(rules.mayPay(said), pays, form)
+            _ = try await settle("drop")
+        }
+    }
+
     func testAButtonsWordBesideTheSignIsNoCurrency() async throws {
         let held = try await agent("document.querySelector('#ten').requestSubmit()")
         XCTAssertEqual(held?["amount"] as? String, "$10")

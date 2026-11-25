@@ -274,7 +274,7 @@ final class ReleaseGuardsTests: XCTestCase {
         XCTAssertEqual(AgentRules.dollars("US$42.10"), 42.10)
         XCTAssertEqual(AgentRules.dollars("$1,234.56"), 1234.56)
         XCTAssertEqual(AgentRules.dollars("$1.234,56"), 1234.56)
-        for amount in ["R$1.234,56", "HK$780.00", "MX$1,000.00", "Mex$19.99", "A$50.00", "CA$20", "€1.299,00", "$"] {
+        for amount in ["R$1.234,56", "HK$780.00", "MX$1,000.00", "Mex$19.99", "CAD$5.00", "AR$19.99", "A$50.00", "CA$20", "€1.299,00", "$"] {
             XCTAssertNil(AgentRules.dollars(amount), amount)
         }
     }
