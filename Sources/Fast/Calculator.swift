@@ -695,15 +695,31 @@ enum Calc {
         for (regex, sign) in offs {
             guard let found = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
                   let countRange = Range(found.range(at: 1), in: lower), let count = Int(lower[countRange]),
+                  // Every unit is a day or more, so no count past the days
+                  // in ten thousand years lands on a `writable` day. It
+                  // also keeps the product off Int.max, which overflowed
+                  // (a crash) or, met exactly, added nothing (today).
+                  count <= 10_000 * 366,
                   let unitRange = Range(found.range(at: 2), in: lower),
                   let span = spans.first(where: { lower[unitRange].hasPrefix($0.0) }),
-                  let target = calendar.date(byAdding: span.1, value: sign * count * span.2, to: today) else { continue }
+                  let target = calendar.date(byAdding: span.1, value: sign * count * span.2, to: today),
+                  writable(target, in: calendar) else { continue }
             let format = datedWeekday
             let label = "\(count) " + (count == 1 ? String(span.3.dropLast()).lowercased() : span.3.lowercased())
             return Answer(question: sign > 0 ? "Today + " + label : "Today − " + label, questionNote: dated(today),
                           result: dated(target, year: true), resultNote: format.string(from: target), copy: dated(target, year: true), kind: .date)
         }
         return nil
+    }
+
+    /// Whether a day some way off can be the answer: one in the years 1
+    /// to 9999, the four-digit years "MMM d, yyyy" writes. It writes no
+    /// era, so before year 1 the year was wrong (975 BC came out as 0975,
+    /// and 1 BC as 0001, the same as AD 1), and from about ten million
+    /// years on it wrote nothing at all.
+    static func writable(_ day: Date, in calendar: Calendar) -> Bool {
+        let parts = calendar.dateComponents([.era, .year], from: day)
+        return parts.era == 1 && (1...9999).contains(parts.year ?? 0)
     }
 
     /// The ways a day some way off is said, and which way from today.
