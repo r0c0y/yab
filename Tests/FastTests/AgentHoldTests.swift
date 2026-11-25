@@ -19,6 +19,7 @@ final class AgentHoldTests: XCTestCase {
       <div contenteditable="true" id="line" onkeydown="if (event.key === 'Enter') window.talked = 1">Hey</div>
       <div role="button" id="post" onclick="window.talked = 2"><span id="inner">Send</span></div>
     </div>
+    <form id="ten" onsubmit="event.preventDefault(); window.tenPaid = 1"><button id="pay-ten">Pay<span>$10</span></button></form>
     <form id="loja" onsubmit="event.preventDefault(); window.pago = 1">
       <p>Total R$ 1.234,56</p>
       <button id="pagar">Pay now</button>
@@ -164,6 +165,14 @@ final class AgentHoldTests: XCTestCase {
         XCTAssertEqual(held?["commit"] as? String, "Pay now")
         XCTAssertEqual(held?["amount"] as? String, "R$1.234,56")
         try await saw("pago", 0)
+    }
+
+    /// The button's own word beside the sign is no currency: "Pay" and
+    /// "$10" drawn apart read "Pay$10", and the amount is "$10".
+    func testAButtonsWordBesideTheSignIsNoCurrency() async throws {
+        let held = try await agent("document.querySelector('#ten').requestSubmit()")
+        XCTAssertEqual(held?["amount"] as? String, "$10")
+        try await saw("tenPaid", 0)
     }
 
     func testALabelsClickIsItsControls() async throws {

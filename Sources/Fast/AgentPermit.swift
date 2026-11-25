@@ -762,9 +762,11 @@ extension AgentPage {
       }
       // What it comes to, when it pays: on the button ("Pay $42.10"), or on
       // the total's line of its form or page, or the line under it. Whole,
-      // with the letters before its sign (US$, R$, Mex$) and its digits as
-      // written: "€ 1.299,00" was read only to its first point, €1.29.
-      const cash = /(\\b[A-Za-z]{1,3})?[$€£]\\s?\\d(?:[\\d.,]*\\d)?/;
+      // with its digits as written ("€ 1.299,00" was read only to its first
+      // point, €1.29) and a dollar's or a peso's letters before its sign
+      // (US$, R$, Mex$), known ones only, so the word of a button that
+      // draws "Pay" and "$10" apart is no currency.
+      const cash = /(\\b(?:US|AU|A|CA|C|NZ|HK|SG|S|NT|MX|Mex|COL|Col|RD|R|J|TT|CI|BZ|Bz|BDS|Bds|EC|FJ|N|T|Z|B))?[$€£]\\s?\\d(?:[\\d.,]*\\d)?/;
       let amount = (name.match(cash) || [''])[0];
       // The nearest surroundings first, out to the whole page: a checkout's
       // total is seldom inside the button's own form.
