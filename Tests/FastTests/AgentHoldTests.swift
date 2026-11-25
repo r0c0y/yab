@@ -19,6 +19,10 @@ final class AgentHoldTests: XCTestCase {
       <div contenteditable="true" id="line" onkeydown="if (event.key === 'Enter') window.talked = 1">Hey</div>
       <div role="button" id="post" onclick="window.talked = 2"><span id="inner">Send</span></div>
     </div>
+    <form id="loja" onsubmit="event.preventDefault(); window.pago = 1">
+      <p>Total R$ 1.234,56</p>
+      <button id="pagar">Pay now</button>
+    </form>
     <form id="shop" onsubmit="event.preventDefault(); window.paid = 1">
       <p>Order total $42.10</p>
       <button id="pay">Pay now</button>
@@ -151,6 +155,15 @@ final class AgentHoldTests: XCTestCase {
         let again = try await agent("document.querySelector('#mail').dispatchEvent(new Event('submit', { cancelable: true }))")
         XCTAssertEqual(again?["commit"] as? String, "Send")
         try await saw("sent", 0)
+    }
+
+    /// The amount is held as the page writes it, with its currency's
+    /// letters and its decimal comma: "R$ 1.234,56" was held as "$1.23".
+    func testAnAmountIsHeldWholeWithItsCurrency() async throws {
+        let held = try await agent("document.querySelector('#loja').requestSubmit()")
+        XCTAssertEqual(held?["commit"] as? String, "Pay now")
+        XCTAssertEqual(held?["amount"] as? String, "R$1.234,56")
+        try await saw("pago", 0)
     }
 
     func testALabelsClickIsItsControls() async throws {

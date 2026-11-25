@@ -761,8 +761,10 @@ extension AgentPage {
         if (field) draft = field.slice(0, 2000);
       }
       // What it comes to, when it pays: on the button ("Pay $42.10"), or on
-      // the total's line of its form or page, or the line under it.
-      const cash = /(US)?[$€£]\\s?\\d[\\d,]*(\\.\\d{2})?/;
+      // the total's line of its form or page, or the line under it. Whole,
+      // with the letters before its sign (US$, A$, R$) and its digits as
+      // written: "€ 1.299,00" was read only to its first point, €1.29.
+      const cash = /(\\b[A-Z]{1,3})?[$€£]\\s?\\d(?:[\\d.,]*\\d)?/;
       let amount = (name.match(cash) || [''])[0];
       // The nearest surroundings first, out to the whole page: a checkout's
       // total is seldom inside the button's own form.
