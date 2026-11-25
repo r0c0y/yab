@@ -91,6 +91,20 @@ struct CalcTests {
         #expect(answer("0xff")?.result == "255")
     }
 
+    /// A hex number written with only the digits 0 to 9 is still a hex
+    /// number: "0x10" was read as 0 × 10, so the field answered 0.
+    @Test func aHexNumberInDecimalDigitsIsNotASum() {
+        #expect(answer("0x10")?.result == "16")
+        #expect(answer("0x10")?.kind == .numberBase)
+        #expect(answer("0x400")?.result == "1,024")
+        #expect(answer("0x400")?.copy == "1024")
+        #expect(answer("0x10+1") == nil)
+        // A sum with an x for times is still one.
+        #expect(answer("10x10")?.result == "100")
+        #expect(answer("1.0x10")?.result == "10")
+        #expect(answer("0 x 10")?.result == "0")
+    }
+
     /// A comma groups thousands, or lakhs, only where it can. One that
     /// can't is the decimal point it is in much of the world: "1,5" and
     /// "3,14" were fifteen and 314, so 1,5 kg was 33 pounds. Digits that

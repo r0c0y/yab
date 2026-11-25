@@ -879,6 +879,10 @@ enum Sum {
                 || words.range(of: #"^√\s*[(0-9π]"#, options: .regularExpression) != nil
                 || words.range(of: #"^[0-9.]+\s*π$"#, options: .regularExpression) != nil
         else { return nil }
+        // "0x10" is sixteen in hex (Calc.base reads it), not nought times
+        // ten: an x right after a 0 that starts a number begins a hex
+        // number. Spaced, "0 x 10" stays a sum.
+        guard words.range(of: #"(^|[^0-9.,])0x[0-9]"#, options: .regularExpression) == nil else { return nil }
         var parser = Parser(Array(words.replacingOccurrences(of: " ", with: "")))
         guard let value = parser.expression(), parser.done, value.isFinite else { return nil }
         return (value, shown(value))
