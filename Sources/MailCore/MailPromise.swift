@@ -197,10 +197,13 @@ public enum MailPromise {
         else if has(#"\b(day after tomorrow)\b"#) { offset = 2 }
         else if has(#"\btomorrow morning\b"#) { offset = 1; hour = 10 }
         else if has(#"\b(tomorrow|tmrw|tmr)\b"#) { offset = 1 }
-        else if has(#"\bearly next week\b"#) { offset = (3 - weekday + 7) % 7 + 7; soft = true }
+        // A week ends on its Friday; said on a weekend, the coming week's.
+        // Early next week is the Tuesday of the week next week names, three
+        // days before its Friday.
+        else if has(#"\bearly next week\b"#) { offset = (6 - weekday + 7) % 7 + 4; soft = true }
         else if has(#"\b(next week)\b"#) { offset = (6 - weekday + 7) % 7 + 7; soft = true }
         else if has(#"\b(end of (the )?week|this week|eow|by the weekend)\b"#) {
-            offset = weekday == 7 || weekday == 1 ? (6 - weekday + 7) % 7 + 7 : (6 - weekday + 7) % 7; soft = true
+            offset = (6 - weekday + 7) % 7; soft = true
         } else if has(#"\b(end of (the )?month|eom)\b"#) {
             let range = calendar.range(of: .day, in: .month, for: start)?.count ?? 30
             offset = range - calendar.component(.day, from: start); soft = true
