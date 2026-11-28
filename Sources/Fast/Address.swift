@@ -37,8 +37,10 @@ enum Address {
         if let file = file(text) { return file }
         guard !text.contains(" ") else { return nil }
 
-        // Written with a scheme, it is taken at its word.
-        if let split = text.range(of: "://") {
+        // Written with a scheme, it is taken at its word. A "://" after a
+        // "/", "?" or "#" is in the address's own path or query
+        // (web.archive.org/web/2024/https://…, ?next=https://…), not a scheme.
+        if let split = text.range(of: "://"), !text[..<split.lowerBound].contains(where: { "/?#".contains($0) }) {
             let scheme = text[..<split.lowerBound].lowercased()
             guard ours.contains(scheme) else { return nil }
             return ascii(URL(string: text))
