@@ -107,6 +107,26 @@ struct PromisesTests {
         #expect(couple.soft && calendar.isDate(couple.date, inSameDayAs: Self.wednesday.addingTimeInterval(2 * 86_400)))
     }
 
+    /// "Early next week" is the Tuesday of the week "next week" names, said
+    /// on any day; "this week" said on a weekend is the coming week, before
+    /// next week's.
+    @Test func aWeekNamedFromAnyDay() throws {
+        let calendar = Calendar.current
+        // Monday 12 to Sunday 18 October 2026, in the morning.
+        for day in 12...18 {
+            let at = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 10)))
+            let next = try #require(due("I'll send it next week.", at: at))
+            let early = try #require(due("I'll send it early next week.", at: at))
+            #expect(early.soft && calendar.component(.weekday, from: early.date) == 3)
+            #expect(calendar.dateComponents([.day], from: early.date, to: next.date).day == 3, "said on the \(day)th")
+            let week = try #require(due("I'll draft it this week.", at: at))
+            #expect(week.date < next.date, "said on the \(day)th")
+        }
+        // Said on a Wednesday: the Tuesday six days on, not thirteen.
+        let early = try #require(due("I'll send it early next week."))
+        #expect(calendar.isDate(early.date, inSameDayAs: Self.wednesday.addingTimeInterval(6 * 86_400)))
+    }
+
     // MARK: - its title and words
 
     func promise(_ quote: String, person: String = "Olya Petrova", address: String = "olya@acme.io", theirs: Bool = false,
