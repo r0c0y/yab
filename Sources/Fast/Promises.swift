@@ -192,7 +192,8 @@ final class Promises {
             .trimmingCharacters(in: .whitespaces)
             : words.replacingOccurrences(of: #"\byou\b"#, with: name, options: .regularExpression)
         words = words.replacingOccurrences(of: #"^intro\b"#, with: "introduce", options: [.regularExpression, .caseInsensitive])
-        words = words.replacingOccurrences(of: #"\byour\b"#, with: name + "'s", options: .regularExpression)
+        // To a channel there is no one's to say: "review your PR" is "review the PR".
+        words = words.replacingOccurrences(of: #"\byour\b"#, with: name.isEmpty ? "the" : name + "'s", options: .regularExpression)
         return clip(words.prefix(1).uppercased() + words.dropFirst())
     }
 
