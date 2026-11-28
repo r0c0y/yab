@@ -272,6 +272,18 @@ struct PromisesTests {
         #expect(MailPromise.reading("Reply YES and I'll send you a free audit.") == nil)
     }
 
+    /// Said on a site to a channel: no one's name for "your" either.
+    @Test func yourOnASiteNamesNoOne() {
+        let review = MailPromised(message: "r", thread: "x", quote: "I'll review your PR tomorrow.", person: "", address: "github.com",
+                                  kind: .word, at: Self.wednesday)
+        #expect(Promises.title(review) == "Review the PR")
+        let invoice = MailPromised(message: "i", thread: "x", quote: "I'll send your invoice by Friday.", person: "", address: "app.slack.com",
+                                   kind: .file, at: Self.wednesday)
+        #expect(Promises.title(invoice) == "Send the invoice")
+        // To someone by name, still theirs.
+        #expect(Promises.title(promise("I'll review your PR tomorrow.")) == "Review Olya's PR")
+    }
+
     @Test func aSentencesShape() {
         #expect(Promises.fingerprint("I'll be back online tomorrow at 9!") == Promises.fingerprint("I'll be back online tomorrow at 10."))
         #expect(Promises.fingerprint("I'll send the deck") != Promises.fingerprint("I'll send the numbers"))
