@@ -107,6 +107,22 @@ struct AddressTests {
         #expect(Self.url("github.com/sam") == "https://github.com/sam")
     }
 
+    /// A "://" further on, in the path or the query, is the address's own,
+    /// not its scheme: the Wayback Machine's pages, a sign-in's way back.
+    @Test func anAddressInsideAnAddressIsStillAPlace() throws {
+        #expect(Self.url("web.archive.org/web/2024/https://example.com/") == "https://web.archive.org/web/2024/https://example.com/")
+        #expect(Self.url("example.com/login?next=https://example.com/home") == "https://example.com/login?next=https://example.com/home")
+        #expect(Self.url("localhost:3000/callback?to=http://localhost:3000/") == "http://localhost:3000/callback?to=http://localhost:3000/")
+        #expect(Self.url("example.com/a#https://b.example") == "https://example.com/a#https://b.example")
+        // ⌘L's address, edited, is still the page it was.
+        let page = try #require(URL(string: "https://web.archive.org/web/2024/https://example.com/"))
+        let edited = Address.whole(page).replacingOccurrences(of: "2024", with: "2023")
+        #expect(Self.url(edited) == "https://web.archive.org/web/2023/https://example.com/")
+        // A scheme Yab doesn't show is still refused, and one it does is taken.
+        #expect(Self.url("mailto://x") == nil)
+        #expect(Self.url("http://a.b/?u=https://c.d") == "http://a.b/?u=https://c.d")
+    }
+
     @Test func editableAddressesKeepWWWWhenTheirPathIsChanged() throws {
         for host in ["www.portaldasfinancas.gov.pt", "www.example.com:8443"] {
             let original = try #require(URL(string: "https://\(host)/old?x=1#part"))
